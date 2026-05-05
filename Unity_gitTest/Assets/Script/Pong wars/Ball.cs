@@ -10,6 +10,9 @@ public class Ball : MonoBehaviour
     [Header("Audio")]
     public AudioClip wallBounceClip;
     public AudioClip blockDestroyClip;
+    public AudioClip powerUpClip;
+
+    [HideInInspector] public bool isExtraBall = false;
 
     private Vector2 direction;
     private Rigidbody2D rb;
@@ -27,16 +30,33 @@ public class Ball : MonoBehaviour
         camHeight = cam.orthographicSize;
         camWidth = cam.orthographicSize * cam.aspect;
 
-        Vector2[] directions =
-        {
-            new Vector2(1, 1),
-            new Vector2(1, -1),
-            new Vector2(-1, 1),
-            new Vector2(-1, -1)
-        };
+        // Apply team color
+        GridSpawner.instance.ApplyBallColor(gameObject, isBlackBall);
 
-        direction = directions[Random.Range(0, directions.Length)].normalized;
-        rb.linearVelocity = direction * speed;
+        if (rb.linearVelocity.sqrMagnitude < 0.01f)
+        {
+            Vector2[] directions =
+            {
+                new Vector2(1, 1),
+                new Vector2(1, -1),
+                new Vector2(-1, 1),
+                new Vector2(-1, -1)
+            };
+
+            direction = directions[Random.Range(0, directions.Length)].normalized;
+            rb.linearVelocity = direction * speed;
+        }
+        else
+        {
+            direction = rb.linearVelocity.normalized;
+        }
+    }
+
+    public void SetDirection(Vector2 dir)
+    {
+        direction = dir.normalized;
+        if (rb != null)
+            rb.linearVelocity = direction * speed;
     }
 
     void Update()
@@ -84,7 +104,7 @@ public class Ball : MonoBehaviour
             transform.position = pos;
             direction = NudgeDirection(direction);
             rb.linearVelocity = direction * speed;
-            //SoundManager.instance.PlayWall(wallBounceClip);
+            SoundManager.instance.PlayWall(wallBounceClip);
         }
     }
 
@@ -92,6 +112,25 @@ public class Ball : MonoBehaviour
     {
         if (isProcessingHit) return;
 
+        // --- Power up collection ---
+        PowerUp powerUp = collision.gameObject.GetComponent<PowerUp>();
+        if (powerUp != null)
+        {
+            var pos = collision.transform.position;
+            isProcessingHit = true;
+            SoundManager.instance.PlayBlock(powerUpClip);
+            Destroy(collision.gameObject);
+
+            // Refill the cell based on which half of the screen it was on
+            bool isLeftHalf = pos.x < 0f;
+            GridSpawner.instance.SpawnCell(pos, isLeftHalf);
+
+            SpawnTripleBalls();
+            StartCoroutine(ResetHitLock());
+            return;
+        }
+
+        // --- Block destruction ---
         int blackLayer = LayerMask.NameToLayer("Black");
         int whiteLayer = LayerMask.NameToLayer("White");
         int hitLayer = collision.gameObject.layer;
@@ -141,6 +180,51 @@ public class Ball : MonoBehaviour
                                       isBlackBall);
 
         StartCoroutine(ResetHitLock());
+    }
+
+    void SpawnTripleBalls()
+    {
+        // This ball continues on its current path
+        // Spawn two extra balls splitting left and right
+        Vector2 left = RotateVector(direction, 30f);
+        Vector2 right = RotateVector(direction, -30f);
+
+        SpawnExtraBall(left);
+        SpawnExtraBall(right);
+    }
+
+    void SpawnExtraBall(Vector2 dir)
+    {
+        GameObject prefab = isBlackBall
+            ? GridSpawner.instance.blackBallPrefab
+            : GridSpawner.instance.whiteBallPrefab;
+
+        GameObject newBall = Instantiate(prefab, transform.position, Quaternion.identity);
+
+        // Copy all settings
+        Ball ballScript = newBall.GetComponent<Ball>();
+        if (ballScript != null)
+        {
+            ballScript.isBlackBall = isBlackBall;
+            ballScript.speed = speed;
+            ballScript.isExtraBall = true;
+            ballScript.wallBounceClip = wallBounceClip;
+            ballScript.blockDestroyClip = blockDestroyClip;
+            ballScript.powerUpClip = powerUpClip;
+        }
+
+        Rigidbody2D newRb = newBall.GetComponent<Rigidbody2D>();
+        if (newRb != null)
+            newRb.linearVelocity = dir.normalized * speed;
+    }
+
+    Vector2 RotateVector(Vector2 v, float degrees)
+    {
+        float rad = degrees * Mathf.Deg2Rad;
+        float cos = Mathf.Cos(rad);
+        float sin = Mathf.Sin(rad);
+        return new Vector2(cos * v.x - sin * v.y,
+                           sin * v.x + cos * v.y).normalized;
     }
 
     Vector2 NudgeDirection(Vector2 dir)
