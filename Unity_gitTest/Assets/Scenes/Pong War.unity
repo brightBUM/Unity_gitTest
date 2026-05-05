@@ -381,6 +381,55 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
+--- !u!1 &1666107399
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1666107401}
+  - component: {fileID: 1666107400}
+  m_Layer: 0
+  m_Name: ObjectPoolManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1666107400
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1666107399}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 064d75fee6fd4d5448fee594b7bb035a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  objectsToPool:
+  - {fileID: 7139423676190738541, guid: 50f36cfd8b0bde448a7596fc4421eea6, type: 3}
+  - {fileID: 6032818127059081291, guid: 90c8ad66be3223042ab7b8ef94819e68, type: 3}
+  - {fileID: 4634908067082448230, guid: 758c3a8255d67f644b7f5c2a6864c62f, type: 3}
+  - {fileID: 1438410053149030770, guid: 70861480c78135f488507d54f0b2faef, type: 3}
+--- !u!4 &1666107401
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1666107399}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1814377127
 GameObject:
   m_ObjectHideFlags: 0
@@ -410,15 +459,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4b937354971c4bd478e067161dfbca6a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  blackBallPrefab: {fileID: 4634908067082448230, guid: 758c3a8255d67f644b7f5c2a6864c62f, type: 3}
-  whiteBallPrefab: {fileID: 1438410053149030770, guid: 70861480c78135f488507d54f0b2faef, type: 3}
-  blackPrefab: {fileID: 7139423676190738541, guid: 059b60daf52a30b4a8598a3a0c038856, type: 3}
-  whitePrefab: {fileID: 6053581378225674038, guid: 94e7706fff8b8f14b8a826f5aa7f3cbe, type: 3}
-  powerUpPrefab: {fileID: 6032818127059081291, guid: 90c8ad66be3223042ab7b8ef94819e68, type: 3}
-  cellSize: 1
-  powerUpSpawnChance: 0.1
   teamAColor: {r: 0.23921569, g: 0.2509804, b: 0.35686275, a: 1}
   teamBColor: {r: 0.95686275, g: 0.94509804, b: 0.87058824, a: 1}
+  cellSize: 0.5
+  powerUpSpawnChance: 0.05
 --- !u!4 &1814377129
 Transform:
   m_ObjectHideFlags: 0
@@ -607,6 +651,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: White Ball
       objectReference: {fileID: 0}
+    - target: {fileID: 6418239324015388502, guid: 70861480c78135f488507d54f0b2faef, type: 3}
+      propertyPath: ballMultiplier
+      value: 2
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -664,6 +712,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Black Ball (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 4782444767305022233, guid: 758c3a8255d67f644b7f5c2a6864c62f, type: 3}
+      propertyPath: ballMultiplier
+      value: 2
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -680,3 +732,4 @@ SceneRoots:
   - {fileID: 1814377129}
   - {fileID: 1503539222}
   - {fileID: 978946222}
+  - {fileID: 1666107401}

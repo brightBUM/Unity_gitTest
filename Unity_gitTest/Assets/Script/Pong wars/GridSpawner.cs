@@ -1,15 +1,13 @@
-using UnityEngine;
+﻿using UnityEngine;
+using System.Collections.Generic;
 
 public class GridSpawner : MonoBehaviour
 {
     public static GridSpawner instance;
 
-    [Header("Prefabs")]
-    public GameObject blackBallPrefab;
-    public GameObject whiteBallPrefab;
-    public GameObject blackPrefab;
-    public GameObject whitePrefab;
-    public GameObject powerUpPrefab;
+    [Header("Team Colors")]
+    public Color teamAColor = Color.black;
+    public Color teamBColor = Color.white;
 
     [Header("Grid Settings")]
     public float cellSize = 0.5f;
@@ -18,12 +16,16 @@ public class GridSpawner : MonoBehaviour
     [Range(0f, 1f)]
     public float powerUpSpawnChance = 0.05f;
 
-    [Header("Team Colors")]
-    public Color teamAColor = Color.black;
-    public Color teamBColor = Color.white;
-
     private Camera cam;
     private float camHeight, camWidth;
+
+    private HashSet<Block> pendingConversion = new HashSet<Block>();
+
+    // Pool indices
+    const int BLOCK = 0;
+    const int POWERUP = 1;
+    const int BLACK_BALL = 2;
+    const int WHITE_BALL = 3;
 
     void Awake()
     {
@@ -35,8 +37,12 @@ public class GridSpawner : MonoBehaviour
         cam = Camera.main;
         camHeight = cam.orthographicSize;
         camWidth = cam.orthographicSize * cam.aspect;
-
         SpawnGrid();
+    }
+
+    void LateUpdate()
+    {
+        pendingConversion.Clear();
     }
 
     void SpawnGrid()
@@ -55,66 +61,37 @@ public class GridSpawner : MonoBehaviour
                 float y = startY + row * cellSize;
                 Vector3 pos = new Vector3(x, y, 0f);
 
-                bool isLeftHalf = x < 0f;
-                SpawnCell(pos, isLeftHalf);
+                GameObject cell = ObjectPoolManager.Instance.Spawn(BLOCK, pos, Quaternion.identity);
+                Block block = cell.GetComponent<Block>();
+                block.Convert(x < 0f);
             }
         }
     }
 
-    public void SpawnCell(Vector3 pos, bool isBlackSide)
+    // Called by Ball when it hits a block
+    public void ConvertCell(Block block, bool destroyedByBlackBall)
     {
-        GameObject prefab = isBlackSide ? blackPrefab : whitePrefab;
-        string layerName = isBlackSide ? "Black" : "White";
+        if (block == null || !block.gameObject.activeInHierarchy) return;
+        if (pendingConversion.Contains(block)) return;
 
-        GameObject cell = Instantiate(prefab, pos, Quaternion.identity, transform);
-        cell.layer = LayerMask.NameToLayer(layerName);
+        pendingConversion.Add(block);
 
-        // Apply team color to sprite
-        SpriteRenderer sr = cell.GetComponent<SpriteRenderer>();
-        if (sr != null)
-            sr.color = isBlackSide ? teamAColor : teamBColor;
-
-        BoxCollider2D bc = cell.GetComponent<BoxCollider2D>();
-        if (bc != null)
-        {
-            bc.size = Vector2.one * cellSize;
-            bc.isTrigger = true;
-        }
-    }
-
-    public void SwapCell(GameObject cell, Vector3 pos, bool destroyedByBlackBall)
-    {
-        Destroy(cell);
+        // Black block → convert to white, white block → convert to black
+        bool blockWasBlack = block.gameObject.layer == LayerMask.NameToLayer("Black");
+        block.Convert(!blockWasBlack);
 
         // Roll for power up
         if (Random.value <= powerUpSpawnChance)
         {
-            GameObject powerUp = Instantiate(powerUpPrefab, pos, Quaternion.identity, transform);
+            // Spawn in destroying ball's own area
+            float minX = destroyedByBlackBall ? -camWidth : 0f;
+            float maxX = destroyedByBlackBall ? 0f : camWidth;
+            float randX = Random.Range(minX + cellSize, maxX - cellSize);
+            float randY = Random.Range(-camHeight + cellSize, camHeight - cellSize);
+            Vector3 powerUpPos = SnapToGrid(new Vector3(randX, randY, 0f));
 
-            CircleCollider2D cc = powerUp.GetComponent<CircleCollider2D>();
-            if (cc == null) cc = powerUp.AddComponent<CircleCollider2D>();
-            cc.isTrigger = true;
-            cc.radius = cellSize * 0.4f;
-            return;
-        }
-
-        // Spawn regular swapped cell
-        bool newSideIsBlack = !destroyedByBlackBall;
-        string newLayer = newSideIsBlack ? "Black" : "White";
-        GameObject newPrefab = newSideIsBlack ? blackPrefab : whitePrefab;
-
-        GameObject newCell = Instantiate(newPrefab, pos, Quaternion.identity, transform);
-        newCell.layer = LayerMask.NameToLayer(newLayer);
-
-        SpriteRenderer sr = newCell.GetComponent<SpriteRenderer>();
-        if (sr != null)
-            sr.color = newSideIsBlack ? teamAColor : teamBColor;
-
-        BoxCollider2D bc = newCell.GetComponent<BoxCollider2D>();
-        if (bc != null)
-        {
-            bc.size = Vector2.one * cellSize;
-            bc.isTrigger = true;
+            GameObject powerUp = ObjectPoolManager.Instance.Spawn(POWERUP, powerUpPos, Quaternion.identity);
+            powerUp.layer = LayerMask.NameToLayer("Default");
         }
     }
 
@@ -123,5 +100,37 @@ public class GridSpawner : MonoBehaviour
         SpriteRenderer sr = ball.GetComponent<SpriteRenderer>();
         if (sr != null)
             sr.color = isBlackBall ? teamAColor : teamBColor;
+    }
+
+    public GameObject SpawnBall(bool isBlackBall, Vector3 pos, Vector2 velocity)
+    {
+        int index = isBlackBall ? BLACK_BALL : WHITE_BALL;
+        GameObject ball = ObjectPoolManager.Instance.Spawn(index, pos, Quaternion.identity);
+
+        Rigidbody2D rb = ball.GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+            rb.linearVelocity = velocity;
+        }
+
+        Ball ballScript = ball.GetComponent<Ball>();
+        if (ballScript != null)
+        {
+            ballScript.isBlackBall = isBlackBall;
+            ballScript.InitBall();
+        }
+
+        ApplyBallColor(ball, isBlackBall);
+        return ball;
+    }
+
+    Vector3 SnapToGrid(Vector3 pos)
+    {
+        float halfCell = cellSize / 2f;
+        float x = Mathf.Round((pos.x - halfCell) / cellSize) * cellSize + halfCell;
+        float y = Mathf.Round((pos.y - halfCell) / cellSize) * cellSize + halfCell;
+        return new Vector3(x, y, 0f);
     }
 }

@@ -7,12 +7,13 @@ public class Ball : MonoBehaviour
     public bool isBlackBall = true;
     public float speed = 3f;
 
+    [Header("Multiplier Settings")]
+    public int ballMultiplier = 3;
+
     [Header("Audio")]
     public AudioClip wallBounceClip;
     public AudioClip blockDestroyClip;
     public AudioClip powerUpClip;
-
-    [HideInInspector] public bool isExtraBall = false;
 
     private Vector2 direction;
     private Rigidbody2D rb;
@@ -30,33 +31,33 @@ public class Ball : MonoBehaviour
         camHeight = cam.orthographicSize;
         camWidth = cam.orthographicSize * cam.aspect;
 
-        // Apply team color
         GridSpawner.instance.ApplyBallColor(gameObject, isBlackBall);
 
         if (rb.linearVelocity.sqrMagnitude < 0.01f)
-        {
-            Vector2[] directions =
-            {
-                new Vector2(1, 1),
-                new Vector2(1, -1),
-                new Vector2(-1, 1),
-                new Vector2(-1, -1)
-            };
-
-            direction = directions[Random.Range(0, directions.Length)].normalized;
-            rb.linearVelocity = direction * speed;
-        }
+            SetRandomDirection();
         else
-        {
             direction = rb.linearVelocity.normalized;
-        }
     }
 
-    public void SetDirection(Vector2 dir)
+    public void InitBall()
     {
-        direction = dir.normalized;
-        if (rb != null)
-            rb.linearVelocity = direction * speed;
+        cam = Camera.main;
+        camHeight = cam.orthographicSize;
+        camWidth = cam.orthographicSize * cam.aspect;
+        isProcessingHit = false;
+    }
+
+    void SetRandomDirection()
+    {
+        Vector2[] directions =
+        {
+            new Vector2(1, 1),
+            new Vector2(1, -1),
+            new Vector2(-1, 1),
+            new Vector2(-1, -1)
+        };
+        direction = directions[Random.Range(0, directions.Length)].normalized;
+        rb.linearVelocity = direction * speed;
     }
 
     void Update()
@@ -116,21 +117,26 @@ public class Ball : MonoBehaviour
         PowerUp powerUp = collision.gameObject.GetComponent<PowerUp>();
         if (powerUp != null)
         {
-            var pos = collision.transform.position;
             isProcessingHit = true;
             SoundManager.instance.PlayBlock(powerUpClip);
-            Destroy(collision.gameObject);
 
-            // Refill the cell based on which half of the screen it was on
+            // Refill the cell at power up position
+            Vector3 pos = collision.transform.position;
             bool isLeftHalf = pos.x < 0f;
-            GridSpawner.instance.SpawnCell(pos, isLeftHalf);
 
-            SpawnTripleBalls();
+            ObjectPoolManager.Instance.Despawn(collision.gameObject, 0f);
+
+            // Spawn a fresh block at the power up's position
+            GameObject cell = ObjectPoolManager.Instance.Spawn(0, pos, Quaternion.identity);
+            Block block = cell.GetComponent<Block>();
+            block.Convert(isLeftHalf);
+
+            SpawnMultipliedBalls();
             StartCoroutine(ResetHitLock());
             return;
         }
 
-        // --- Block destruction ---
+        // --- Block conversion ---
         int blackLayer = LayerMask.NameToLayer("Black");
         int whiteLayer = LayerMask.NameToLayer("White");
         int hitLayer = collision.gameObject.layer;
@@ -142,6 +148,7 @@ public class Ball : MonoBehaviour
 
         isProcessingHit = true;
 
+        // Reflection
         Collider2D ballCollider = GetComponent<Collider2D>();
         Vector3 centre = collision.bounds.center;
         Vector3 hitPoint = ballCollider.ClosestPoint(centre);
@@ -175,47 +182,25 @@ public class Ball : MonoBehaviour
 
         SoundManager.instance.PlayBlock(blockDestroyClip);
 
-        GridSpawner.instance.SwapCell(collision.gameObject,
-                                      collision.transform.position,
-                                      isBlackBall);
+        Block hitBlock = collision.gameObject.GetComponent<Block>();
+        GridSpawner.instance.ConvertCell(hitBlock, isBlackBall);
 
         StartCoroutine(ResetHitLock());
     }
 
-    void SpawnTripleBalls()
+    void SpawnMultipliedBalls()
     {
-        // This ball continues on its current path
-        // Spawn two extra balls splitting left and right
-        Vector2 left = RotateVector(direction, 30f);
-        Vector2 right = RotateVector(direction, -30f);
+        int extraCount = ballMultiplier - 1;
+        float spreadAngle = 60f;
+        float step = extraCount > 1 ? spreadAngle / (extraCount - 1) : 0f;
+        float startAngle = -spreadAngle / 2f;
 
-        SpawnExtraBall(left);
-        SpawnExtraBall(right);
-    }
-
-    void SpawnExtraBall(Vector2 dir)
-    {
-        GameObject prefab = isBlackBall
-            ? GridSpawner.instance.blackBallPrefab
-            : GridSpawner.instance.whiteBallPrefab;
-
-        GameObject newBall = Instantiate(prefab, transform.position, Quaternion.identity);
-
-        // Copy all settings
-        Ball ballScript = newBall.GetComponent<Ball>();
-        if (ballScript != null)
+        for (int i = 0; i < extraCount; i++)
         {
-            ballScript.isBlackBall = isBlackBall;
-            ballScript.speed = speed;
-            ballScript.isExtraBall = true;
-            ballScript.wallBounceClip = wallBounceClip;
-            ballScript.blockDestroyClip = blockDestroyClip;
-            ballScript.powerUpClip = powerUpClip;
+            float angle = extraCount > 1 ? startAngle + step * i : 0f;
+            Vector2 newDir = RotateVector(direction, angle);
+            GridSpawner.instance.SpawnBall(isBlackBall, transform.position, newDir * speed);
         }
-
-        Rigidbody2D newRb = newBall.GetComponent<Rigidbody2D>();
-        if (newRb != null)
-            newRb.linearVelocity = dir.normalized * speed;
     }
 
     Vector2 RotateVector(Vector2 v, float degrees)
